@@ -48,22 +48,83 @@ int main(int argc, char* argv[]) {
     }
     ifstream ifile(ifilename.c_str());
 
-    map<string, int> keyH;
-    vector<string> primaryKey;
+    int s = seed.at(0).length();
+    
+    map<string, int> keyH; //
+    map<string, int> subKey[s];//Multikey map.
+    vector<KeyData> primaryKey;
+    map<int, vector<string> > keyGroup;
     map<int, vector<int> > H;
     map<int, int > H_family;
+    vector<Family> F;
 
-    int s = seed.at(0).length();
     int loc = 0;
 
 
-    vector<Family> F;
+    clock_t t1,t2;
+    t1=clock();
 
     queue<int> Q;
-//    cout<<"before ifile"<<endl;    
+    //************************************************************************//  
+    //    PART 1
+    //************************************************************************//  
     string prev = "";
     string both = "";
     int offset = 0;
+    if (ifile.is_open()) {
+        getline(ifile, line);
+        while (getline(ifile, line)) {
+            if (prev != "") {
+                both = prev + line;
+                for (int i = 0; i < offset; i++) {
+                    string key = "";
+                    for (int j = 0; j < s; j++) {
+                        key += both[j + i];
+                    }    
+                    if (keyH.find(key) == keyH.end() )
+                    {
+                        assignSeed(seed, H, keyH, primaryKey, subKey, keyGroup, key, s);
+                    }  
+                    else
+                    {
+                        primaryKey[keyH[key]].addKey(key);
+                    }
+                    H[keyH[key]].push_back(i + loc - offset);  
+                }
+            if(loc%1000==0)
+                cout<<loc/1000<<endl;
+            } else offset = line.length();
+            prev = line;
+            loc += offset;
+        }
+        for (int i = offset; i < both.length() - s; i++) {
+            string key = "";
+            for (int j = 0; j < s; j++) {
+                key += both[j + i];
+            }
+            if (keyH.find(key) == keyH.end() )
+            {
+                assignSeed(seed, H, keyH, primaryKey, subKey, keyGroup, key,s);
+            }
+            else
+            {
+                primaryKey[keyH[key]].addKey(key);
+            }
+            H[keyH[key]].push_back(i + loc - offset*2);
+        }
+    } else cout << "Unable to open file" << endl;
+
+    ifile.clear();
+    
+//    cleanse_data(H, keyH, primaryKey, subKey, keyGroup, f);
+    cout<<"oop"<<endl;
+    
+    ifile.seekg(0, ios::beg);
+    //************************************************************************//
+    //    PART 2
+    //************************************************************************//    
+    prev="";
+    loc=0;
     if (ifile.is_open()) {
         getline(ifile, line);
         while (getline(ifile, line)) {
@@ -79,14 +140,13 @@ int main(int argc, char* argv[]) {
                     string key = "";
                     for (int j = 0; j < s; j++) {
                         key += both[j + i];
-                    }    
-                    if (keyH.find(key) == keyH.end() )
-                    {
-                        assignSeed(seed, keyH, primaryKey, key, s);
+                    }             
+                    if (H[keyH[key]].size() >f){
+                        advanceQueue(Q, F, H_family, H, keyH[key], i + loc - offset, s);
                     }
-                    
-                    advanceQueue(Q, F, H_family, H, keyH[key], i + loc - offset, s);
                 }
+            if(loc%1000==0)
+                cout<<loc/1000<<endl;
             } else offset = line.length();
             prev = line;
             loc += offset;
@@ -103,18 +163,15 @@ int main(int argc, char* argv[]) {
             for (int j = 0; j < s; j++) {
                 key += both[j + i];
             }
-            if (keyH.find(key) == keyH.end() )
-            {
-                assignSeed(seed, keyH, primaryKey, key,s);
-            }
-            advanceQueue(Q, F, H_family, H, keyH[key], i + loc - offset * 2, s);
+                if (H[keyH[key]].size() >f)
+                    advanceQueue(Q, F, H_family, H, keyH[key], i + loc - offset * 2, s);
         }
-        for (int f = Q.front(); !Q.empty(); f = Q.front()) {
-            Q.pop();
-            clean_up(H_family, H, F, f, s);
+        for (int fam = 0; fam<F.size(); fam++) {
+            clean_up(H_family, H, F, fam, s);
         }
     } else cout << "Unable to open file" << endl;
-
+        
+    t2=clock();
 
     ofstream ofile;
     ofile.open(ofilename.c_str());
@@ -126,7 +183,7 @@ int main(int argc, char* argv[]) {
             vector<int> currentback = H.at(F[k].lmer_list.back());
             cout << k << " " << F[k].lmer_list.size() << " " << currentfront.size() << " " << (currentback.size() == currentfront.size());
             for (int i = 0; i < F[k].lmer_list.size(); i++)
-                cout << ", " << F[k].lmer_list[i];
+                cout << ", " << primaryKey[F[k].lmer_list[i]].averageString();
             cout << endl;
             if (currentfront.size() > f)
                 for (int i = 0; i < currentfront.size(); i++) {
@@ -134,7 +191,21 @@ int main(int argc, char* argv[]) {
 
                 }
         }
-
         ofile.close();
     } else cout << "Unable to open file";
+//    if (ofile.is_open()) {
+//        ofile << "# fam\tele\tstart\tend" << endl;
+//        int e = 0;
+//        for (int k = 0; k < H.size(); k++) {
+//            if (H[k].size() > f)
+//            {
+//                ofile << k <<"\t"<< H[k].size() << "\t";
+//                for (int i = 0; i<keyGroup[k].size(); i++) {
+//                    ofile << keyGroup[k].at(i)<<"\t";
+//                }
+//                ofile << endl;
+//            }
+//        }
+    double diff = ((float)t2-(float)t1) / CLOCKS_PER_SEC;
+    cout<<diff<<endl;
 }

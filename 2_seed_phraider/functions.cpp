@@ -5,13 +5,24 @@
  */
 
 #include <vector>
+#include <map>
 
 #include "Family.cpp"
+#include "KeyData.cpp"
+
 using namespace std;
 
 bool BelongsToFam(Family F, map<int, vector<int> > H, int v) {
 //        cout<<"belongstofam"<<endl;
-    return H[v].size() == H[F.first()].size() && H[v].front() - H[F.first()].front() == H[v].back() - H[F.first()].back();
+    if (H[v].size() != H[F.first()].size())
+        return false;
+    for(int i=0;i<H[v].size();i++)
+    {
+        if(H[v].at(i) - H[F.first()].at(i) != H[v].front() - H[F.first()].front())
+            return false;
+    }
+    
+    return true;
 }
 
 void frequencyShift(map<int, vector<int> >& F_freq, int freq, int fam)
@@ -104,8 +115,8 @@ void findOrAdd(queue<int>& Q, vector<Family>& F, map<int, int>& H_family,
 void advanceQueue(queue<int>& Q, vector<Family>& F, map<int, int>& H_family,
         map<int, vector<int> >& H, int keyNum, int i, int s) {
 //    cout<<"advancequeue"<<endl;
-    H[keyNum].push_back(i);
-    if (H[keyNum].size() == 2) {
+//    if (H[keyNum].size() == 2) {
+      if (H_family.find(keyNum)==H_family.end() ) {
         findOrAdd(Q, F, H_family, H, keyNum, i, s);
     } else if (H[keyNum].size() > 2) {
         int f = H_family[keyNum];
@@ -172,43 +183,97 @@ void clean_up(map<int, int>& H_family, map<int, vector<int> >& H,
     }
 }
 
-void assignSeed(vector<string> seed, map<string, int>& keyH, vector<string>& primaryKey, string key, int s)
-{
-//    cout<<"assignseed " <<endl;
-    if(!primaryKey.empty())        
-    for (int s_i=0;s_i<seed.size();s_i++)
-    {
-        string seed_i=seed.at(s_i);
-        bool nDetected=false;
-        for (int i=0;i<s;i++)
-            {
-                if (seed_i.at(i)=='1' && key.at(i)=='n')
-                    nDetected=true;
-            }
-        if(!nDetected)
-        {
-            for (int p_i =0; p_i<primaryKey.size(); p_i++)
-            {
-                string p=primaryKey.at(p_i);
-                bool noMatch=false;
-                for (int i=0;i<s && !noMatch;i++)
-                {
-                    if (seed_i.at(i)=='1')
-                    {
-                        if (p.at(i)!=key.at(i))
-                        {
-                            noMatch=true;
-                        }
-                    }
+//void cleanse_data(map<int, vector<int> >& H, map<string, int>& keyH, vector<string>& primaryKey, 
+//        map<string, int> subKey[], map<int, vector<string> > & keyGroup, int f)
+//{
+//    for(int i =0; i<primaryKey.size();i++)
+//    {
+//        string iPrime= primaryKey[i];
+//        
+//    }
+//}
+void assignSeed(vector<string> seed, map<int, vector<int> >& H, map<string, int>& keyH, vector<KeyData>& primaryKey, 
+        map<string, int> subKey[], map<int, vector<string> > & keyGroup, string key, int s) {
+//        cout<<"assignseed " + key <<endl;
+    string keyS[s];
+       
+    bool found=false;
+    for (int s_i = 0; s_i < seed.size(); s_i++) {
+        string seed_i = seed.at(s_i);
+        keyS[s_i] = "";
+        bool nDetected = false;
+        for (int j = 0; j < s; j++) {
+            if (seed_i.at(j) == '1') {
+                if (key[j] == 'n'||key[j] == 'N') {
+                    nDetected = true;
                 }
-                if(!noMatch)
+                keyS[s_i] += key[j];
+            }
+        }
+        if (!nDetected) {
+            if (subKey[s_i].find(keyS[s_i]) != subKey[s_i].end()) {
+                int foundIndex = subKey[s_i][keyS[s_i]];
+                if (!found)
                 {
-                    keyH[key]=p_i;
-                    return;
+                    keyH[key] = foundIndex;
+                    keyGroup[foundIndex].push_back(key);
+                    primaryKey[foundIndex].addKey(key);
+                    found=true;
+                }
+                else
+                {
+                    int subIndex=keyH[key];
+                    if(subIndex!=foundIndex)
+                    {
+                        primaryKey[subIndex].dumpData(primaryKey[foundIndex]);
+                        for(int j = 0;j<keyGroup[foundIndex].size();j++)
+                        {
+                            string r_j=keyGroup[foundIndex][j];
+                            keyH[r_j] = subIndex;
+                            keyGroup[subIndex].push_back(r_j);
+                            for(int s_ii = 0; s_ii < seed.size(); s_ii++)
+                            {
+                                string S="";
+                                for (int j = 0; j < s; j++) {
+                                    if (seed.at(s_ii).at(j) == '1') {
+                                        S += r_j[j];
+                                    }
+                                }
+                                subKey[s_ii][S]=subIndex;
+                            }
+                            
+                        }
+                        for(vector<int>::iterator kIt=H[foundIndex].begin();kIt<H[foundIndex].end();kIt++)
+                        {
+                            vector<int>::iterator fIt=H[subIndex].begin();
+                            vector<int>::iterator fItEnd=H[subIndex].end();
+                            while(fIt!=fItEnd&&*kIt>*fIt)
+                            {
+                                fIt++;
+                            }
+                            H[subIndex].insert(fIt,*kIt);
+                        }
+                        H[foundIndex].clear();
+                    }
                 }
             }
         }
     }
-    keyH[key]=primaryKey.size();
-    primaryKey.push_back(key);
+    if (!found){
+        keyH[key] = primaryKey.size();
+        for (int s_i = 0; s_i < seed.size(); s_i++) 
+        {
+            subKey[s_i][keyS[s_i]]=primaryKey.size();
+        }
+        keyGroup[primaryKey.size()].push_back(key);
+        KeyData pK(key);
+        primaryKey.push_back(pK);
+    }
+    else
+    {
+        for (int s_i = 0; s_i < seed.size(); s_i++) 
+        {
+            subKey[s_i][keyS[s_i]]=keyH[key];
+        }
+    }
 }
